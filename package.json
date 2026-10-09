@@ -1,0 +1,17 @@
+{
+  "name": "si-base",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start -p ${PORT:-3000}"
+  },
+  "dependencies": {
+    "mammoth": "^1.9.1",
+    "next": "^15.5.4",
+    "pdf-parse": "^1.1.1",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  }
+}
