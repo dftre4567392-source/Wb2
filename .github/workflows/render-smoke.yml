@@ -1,0 +1,44 @@
+name: Render smoke test
+
+on:
+  push:
+    paths:
+      - '.github/workflows/render-smoke.yml'
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check homepage
+        run: |
+          set -euo pipefail
+          code=$(curl --retry 4 --retry-delay 5 --retry-all-errors -sS -o /tmp/home.html -w '%{http_code}' https://si-base.onrender.com/)
+          echo "home_status=$code"
+          test "$code" = "200"
+          grep -q "SI BASE" /tmp/home.html
+
+      - name: Check chat
+        run: |
+          set -euo pipefail
+          code=$(curl --retry 2 --retry-delay 3 --retry-all-errors -sS -o /tmp/chat.json -w '%{http_code}' \
+            -X POST https://si-base.onrender.com/api/chat \
+            -H 'content-type: application/json' \
+            --data '{"model":"aven","messages":[{"role":"user","content":"Ответь только словом OK"}]}')
+          echo "chat_status=$code"
+          cat /tmp/chat.json
+          test "$code" = "200"
+          grep -qi "OK" /tmp/chat.json
+
+      - name: Check text file upload
+        run: |
+          set -euo pipefail
+          printf 'SI BASE test file' >/tmp/test.txt
+          code=$(curl --retry 2 --retry-delay 3 --retry-all-errors -sS -o /tmp/file.json -w '%{http_code}' \
+            -X POST https://si-base.onrender.com/api/files \
+            -F file=@/tmp/test.txt)
+          echo "file_status=$code"
+          cat /tmp/file.json
+          test "$code" = "200"
+          grep -q "SI BASE test file" /tmp/file.json
