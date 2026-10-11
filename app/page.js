@@ -28,7 +28,7 @@ export default function Home() {
   const [chatId, setChatId] = useState("welcome");
   const [projectId, setProjectId] = useState("general");
   const [assistantId, setAssistantId] = useState("");
-  const [model, setModel] = useState("aven");
+  const [model, setModel] = useState("qwen");
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -43,8 +43,20 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (ready) localStorage.setItem("si-base-state", JSON.stringify(data));
+    if (!ready) return;
+    try {
+      localStorage.setItem("si-base-state", JSON.stringify(data));
+    } catch {
+      // WebView storage can be unavailable/full; keep the current session working.
+    }
   }, [data, ready]);
+
+  useEffect(() => {
+    const app = window.Telegram?.WebApp;
+    if (!app) return;
+    app.ready?.();
+    app.expand?.();
+  }, []);
 
   const chats = useMemo(
     () => data.chats.filter(c => c.mode === mode && c.projectId === projectId),
@@ -100,7 +112,7 @@ export default function Home() {
         next.push({ id: uid(), name: file.name, text: "[Ошибка загрузки файла]" });
       }
     }
-    setAttachments(a => [...a, ...next]);
+    setAttachments(a => [...a, ...next].slice(0, 4));
   }
 
   async function send() {
@@ -240,10 +252,12 @@ export default function Home() {
             {mode === "work" && assistant && <span> / {assistant.name}</span>}
           </div>
           <select value={model} onChange={e => setModel(e.target.value)}>
-            <option value="aven">AVEN</option>
-            <option value="deepseek">DeepSeek</option>
-            <option value="gpt">GPT</option>
-            <option value="qwen">Qwen</option>
+            <option value="qwen">Qwen 3.6</option>
+            <option value="deepseek">DeepSeek V4</option>
+            <option value="gpt">GPT-6 Luna</option>
+            <option value="gemini">Gemini 3.8 Flash</option>
+            <option value="grok">Grok 4.7</option>
+            <option value="claude">Claude Opus 4.8</option>
           </select>
         </header>
 
@@ -256,9 +270,9 @@ export default function Home() {
                 ? "Обычный чат для текста, изображений и документов."
                 : "Работайте внутри проектов и подключайте собственных ассистентов."}</p>
               <div className="quick">
-                <button onClick={() => setInput("Помоги разобраться с этим вопросом: ")}>Разобрать вопрос</button>
-                <button onClick={() => fileRef.current?.click()}>Прикрепить файл</button>
-                {mode === "work" && <button onClick={addAssistant}>Создать ассистента</button>}
+                <button onClick={() => setInput("Помоги разобраться с этим вопросом: ")}>Разобрать по шагам</button>
+                <button onClick={() => setInput("Помоги составить план. ")}>Составить план</button>
+                <button onClick={() => setInput("Улучши этот текст: ")}>Улучшить текст</button>
               </div>
             </div>
           ) : (
@@ -269,7 +283,7 @@ export default function Home() {
                   <div className="bubble">{typeof m.content === "string" ? m.content : "[Сообщение с вложением]"}</div>
                 </article>
               ))}
-              {busy && <article className="assistant"><div className="avatar">SI</div><div className="bubble typing">Думаю…</div></article>}
+              {busy && <article className="assistant"><div className="avatar">SI</div><div className="bubble typing">Отвечаю…</div></article>}
             </div>
           )}
         </div>
