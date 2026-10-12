@@ -18,42 +18,54 @@ jobs:
           echo "home_status=$home"
           test "$home" = "200"
           grep -q "SI BASE" /tmp/home.html
+          grep -q "telegram-web-app.js" /tmp/home.html
 
           health=$(curl --retry 4 --retry-delay 5 --retry-all-errors -sS -o /tmp/health.json -w '%{http_code}' https://si-base.onrender.com/api/health)
           echo "health_status=$health"
           cat /tmp/health.json
           test "$health" = "200"
+          grep -q '"ok":true' /tmp/health.json
 
-      - name: Check all configured AI models
+      - name: Verify protected APIs reject anonymous traffic
         run: |
           set -euo pipefail
-          models=(qwen deepseek gpt gemini grok claude)
-          : > /tmp/model-results.tsv
-          for model in "${models[@]}"; do
-            start=$(date +%s%3N)
-            code=$(curl --max-time 55 -sS -o "/tmp/${model}.json" -w '%{http_code}' \
-              -X POST https://si-base.onrender.com/api/chat \
-              -H 'content-type: application/json' \
-              --data "{\"model\":\"${model}\",\"messages\":[{\"role\":\"user\",\"content\":\"Ответь ровно: OK\"}]}" || true)
-            end=$(date +%s%3N)
-            ms=$((end-start))
-            body=$(tr '\n' ' ' < "/tmp/${model}.json" | head -c 500)
-            printf '%s\t%s\t%s\t%s\n' "$model" "$code" "$ms" "$body" | tee -a /tmp/model-results.tsv
-          done
-          echo '--- model results ---'
-          cat /tmp/model-results.tsv
 
-      - name: Check text file upload
-        run: |
-          set -euo pipefail
+          chat=$(curl -sS -o /tmp/chat.json -w '%{http_code}' \
+            -X POST https://si-base.onrender.com/api/chat \
+            -H 'content-type: application/json' \
+            --data '{"model":"qwen","messages":[{"role":"user","content":"OK"}]}')
+          echo "chat_no_auth=$chat"
+          cat /tmp/chat.json
+          test "$chat" = "401"
+
+          auth=$(curl -sS -o /tmp/auth.json -w '%{http_code}' https://si-base.onrender.com/api/auth/telegram)
+          echo "auth_no_auth=$auth"
+          cat /tmp/auth.json
+          test "$auth" = "401"
+
           printf 'SI BASE test file' >/tmp/test.txt
-          code=$(curl --retry 2 --retry-delay 3 --retry-all-errors -sS -o /tmp/file.json -w '%{http_code}' \
+          files=$(curl -sS -o /tmp/files.json -w '%{http_code}' \
             -X POST https://si-base.onrender.com/api/files \
             -F file=@/tmp/test.txt)
-          echo "file_status=$code"
-          cat /tmp/file.json
-          test "$code" = "200"
-          grep -q "SI BASE test file" /tmp/file.json
+          echo "files_no_auth=$files"
+          cat /tmp/files.json
+          test "$files" = "401"
+
+          products=$(curl -sS -o /tmp/products.json -w '%{http_code}' https://si-base.onrender.com/api/tribute/products)
+          echo "tribute_products_no_auth=$products"
+          cat /tmp/products.json
+          test "$products" = "401"
+
+      - name: Verify Tribute signature is required
+        run: |
+          set -euo pipefail
+          code=$(curl -sS -o /tmp/tribute.json -w '%{http_code}' \
+            -X POST https://si-base.onrender.com/api/tribute/webhook \
+            -H 'content-type: application/json' \
+            --data '{"name":"new_digital_product","payload":{"telegram_user_id":1,"product_name":"SI BASE PLUS"}}')
+          echo "tribute_no_signature=$code"
+          cat /tmp/tribute.json
+          test "$code" = "401"
 
       - name: Measure Render backend burst throughput
         run: |
@@ -75,40 +87,4 @@ jobs:
           echo "backend_other=$other"
           echo "backend_elapsed_ms=$elapsed_ms"
           echo "backend_observed_effective_rpm=$rpm"
-
-      - name: Controlled Qwen burst test when provider is available
-        run: |
-          set -euo pipefail
-          probe=$(curl --max-time 55 -sS -o /tmp/qwen-probe.json -w '%{http_code}' \
-            -X POST https://si-base.onrender.com/api/chat \
-            -H 'content-type: application/json' \
-            --data '{"model":"qwen","messages":[{"role":"user","content":"Ответь ровно: OK"}]}' || true)
-          echo "qwen_probe_status=$probe"
-          if [ "$probe" != "200" ]; then
-            echo "ai_burst_skipped=provider_not_ready"
-            cat /tmp/qwen-probe.json
-            exit 0
-          fi
-
-          rm -f /tmp/ai-burst-*.txt
-          start=$(date +%s%3N)
-          seq 1 20 | xargs -I{} -P5 bash -c '
-            code=$(curl --max-time 55 -sS -o /tmp/ai-burst-{}.json -w "%{http_code}" \
-              -X POST https://si-base.onrender.com/api/chat \
-              -H "content-type: application/json" \
-              --data "{\"model\":\"qwen\",\"messages\":[{\"role\":\"user\",\"content\":\"Ответь ровно: OK\"}]}" || true)
-            echo "$code" > /tmp/ai-burst-{}.txt
-          '
-          end=$(date +%s%3N)
-          elapsed_ms=$((end-start))
-          ok=$(grep -l '^200$' /tmp/ai-burst-*.txt 2>/dev/null | wc -l | tr -d ' ' || true)
-          rate429=$(grep -l '^429$' /tmp/ai-burst-*.txt 2>/dev/null | wc -l | tr -d ' ' || true)
-          other=$((20-ok-rate429))
-          rpm=$((ok*60000/elapsed_ms))
-          echo "ai_burst_total=20"
-          echo "ai_burst_parallelism=5"
-          echo "ai_burst_ok=$ok"
-          echo "ai_burst_429=$rate429"
-          echo "ai_burst_other=$other"
-          echo "ai_burst_elapsed_ms=$elapsed_ms"
-          echo "ai_observed_effective_rpm=$rpm"
+          test "$ok" = "200"
