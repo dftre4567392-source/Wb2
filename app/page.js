@@ -21,6 +21,18 @@ function loadState() {
   }
 }
 
+function getTelegramInitData() {
+  if (typeof window === "undefined") return "";
+  return String(window.Telegram?.WebApp?.initData || "");
+}
+
+function telegramHeaders(base = {}) {
+  const headers = new Headers(base);
+  const initData = getTelegramInitData();
+  if (initData) headers.set("x-telegram-init-data", initData);
+  return headers;
+}
+
 export default function Home() {
   const [data, setData] = useState(starter);
   const [ready, setReady] = useState(false);
@@ -105,7 +117,11 @@ export default function Home() {
       const fd = new FormData();
       fd.append("file", file);
       try {
-        const r = await fetch("/api/files", { method: "POST", body: fd });
+        const r = await fetch("/api/files", {
+          method: "POST",
+          headers: telegramHeaders(),
+          body: fd
+        });
         const j = await r.json();
         next.push({ id: uid(), ...j });
       } catch {
@@ -157,7 +173,7 @@ export default function Home() {
     try {
       const r = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: telegramHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           model,
           system: mode === "work" && assistant ? assistant.system : "",
