@@ -10,6 +10,7 @@ delete process.env.DATABASE_URL;
 
 const security = await import("../lib/security.js");
 const store = await import("../lib/store.js");
+const authRoute = await import("../app/api/auth/telegram/route.js");
 const chatRoute = await import("../app/api/chat/route.js");
 const filesRoute = await import("../app/api/files/route.js");
 const tributeRoute = await import("../app/api/tribute/webhook/route.js");
@@ -40,6 +41,20 @@ test("Telegram initData accepts a valid signature and rejects stale data", () =>
   const stale = security.verifyTelegramInitData(telegramInitData(101, Math.floor(Date.now() / 1000) - 7200));
   assert.equal(stale.ok, false);
   assert.equal(stale.status, 401);
+});
+
+test("any new Telegram user is accepted automatically on FREE without registration", async () => {
+  const userId = 987654321;
+  const response = await authRoute.GET(new Request("http://localhost/api/auth/telegram", {
+    headers: { "x-telegram-init-data": telegramInitData(userId) }
+  }));
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.user.id, String(userId));
+  assert.equal(body.plan, "FREE");
+  assert.equal(await store.getPlan(userId), "FREE");
 });
 
 test("FREE rate limit allows 20 requests and blocks request 21", async () => {
