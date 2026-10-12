@@ -1,4 +1,4 @@
-import { authenticateRequest } from "../../../../lib/security";
+import { authenticateRequest } from "../../../../lib/security.js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
