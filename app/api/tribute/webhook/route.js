@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
-import { verifyTributeSignature } from "../../../../lib/security";
-import { rememberTributeEvent, revokeEntitlement, setEntitlement, storageMode } from "../../../../lib/store";
+import { verifyTributeSignature } from "../../../../lib/security.js";
+import { rememberTributeEvent, revokeEntitlement, setEntitlement, storageMode } from "../../../../lib/store.js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
