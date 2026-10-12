@@ -10,7 +10,7 @@
     "dev": "next dev",
     "build": "npm test && next build",
     "test": "node --test tests/*.test.js",
-    "start": "next start -p ${PORT:-3000}"
+    "start": "node scripts/setup-telegram-bot.js && next start -p ${PORT:-3000}"
   },
   "dependencies": {
     "jszip": "^3.10.1",
