@@ -55,32 +55,60 @@ jobs:
           test "$code" = "200"
           grep -q "SI BASE test file" /tmp/file.json
 
-      - name: Controlled Qwen burst test
+      - name: Measure Render backend burst throughput
         run: |
           set -euo pipefail
-          rm -f /tmp/burst-*.txt
+          rm -f /tmp/health-burst-*.txt
           start=$(date +%s%3N)
-          seq 1 20 | xargs -I{} -P5 bash -c '
-            code=$(curl --max-time 55 -sS -o /tmp/burst-{}.json -w "%{http_code}" \
-              -X POST https://si-base.onrender.com/api/chat \
-              -H "content-type: application/json" \
-              --data "{\"model\":\"qwen\",\"messages\":[{\"role\":\"user\",\"content\":\"Ответь ровно: OK\"}]}" || true)
-            echo "$code" > /tmp/burst-{}.txt
+          seq 1 200 | xargs -I{} -P20 bash -c '
+            code=$(curl --max-time 20 -sS -o /dev/null -w "%{http_code}" https://si-base.onrender.com/api/health || true)
+            echo "$code" > /tmp/health-burst-{}.txt
           '
           end=$(date +%s%3N)
           elapsed_ms=$((end-start))
-          ok=$(grep -l '^200$' /tmp/burst-*.txt 2>/dev/null | wc -l | tr -d ' ')
-          rate429=$(grep -l '^429$' /tmp/burst-*.txt 2>/dev/null | wc -l | tr -d ' ')
-          other=$((20-ok-rate429))
-          if [ "$elapsed_ms" -gt 0 ]; then
-            rpm=$((ok*60000/elapsed_ms))
-          else
-            rpm=0
+          ok=$(grep -l '^200$' /tmp/health-burst-*.txt 2>/dev/null | wc -l | tr -d ' ' || true)
+          other=$((200-ok))
+          rpm=$((ok*60000/elapsed_ms))
+          echo "backend_burst_total=200"
+          echo "backend_parallelism=20"
+          echo "backend_ok=$ok"
+          echo "backend_other=$other"
+          echo "backend_elapsed_ms=$elapsed_ms"
+          echo "backend_observed_effective_rpm=$rpm"
+
+      - name: Controlled Qwen burst test when provider is available
+        run: |
+          set -euo pipefail
+          probe=$(curl --max-time 55 -sS -o /tmp/qwen-probe.json -w '%{http_code}' \
+            -X POST https://si-base.onrender.com/api/chat \
+            -H 'content-type: application/json' \
+            --data '{"model":"qwen","messages":[{"role":"user","content":"Ответь ровно: OK"}]}' || true)
+          echo "qwen_probe_status=$probe"
+          if [ "$probe" != "200" ]; then
+            echo "ai_burst_skipped=provider_not_ready"
+            cat /tmp/qwen-probe.json
+            exit 0
           fi
-          echo "burst_total=20"
-          echo "burst_parallelism=5"
-          echo "burst_ok=$ok"
-          echo "burst_429=$rate429"
-          echo "burst_other=$other"
-          echo "burst_elapsed_ms=$elapsed_ms"
-          echo "observed_effective_rpm=$rpm"
+
+          rm -f /tmp/ai-burst-*.txt
+          start=$(date +%s%3N)
+          seq 1 20 | xargs -I{} -P5 bash -c '
+            code=$(curl --max-time 55 -sS -o /tmp/ai-burst-{}.json -w "%{http_code}" \
+              -X POST https://si-base.onrender.com/api/chat \
+              -H "content-type: application/json" \
+              --data "{\"model\":\"qwen\",\"messages\":[{\"role\":\"user\",\"content\":\"Ответь ровно: OK\"}]}" || true)
+            echo "$code" > /tmp/ai-burst-{}.txt
+          '
+          end=$(date +%s%3N)
+          elapsed_ms=$((end-start))
+          ok=$(grep -l '^200$' /tmp/ai-burst-*.txt 2>/dev/null | wc -l | tr -d ' ' || true)
+          rate429=$(grep -l '^429$' /tmp/ai-burst-*.txt 2>/dev/null | wc -l | tr -d ' ' || true)
+          other=$((20-ok-rate429))
+          rpm=$((ok*60000/elapsed_ms))
+          echo "ai_burst_total=20"
+          echo "ai_burst_parallelism=5"
+          echo "ai_burst_ok=$ok"
+          echo "ai_burst_429=$rate429"
+          echo "ai_burst_other=$other"
+          echo "ai_burst_elapsed_ms=$elapsed_ms"
+          echo "ai_observed_effective_rpm=$rpm"
