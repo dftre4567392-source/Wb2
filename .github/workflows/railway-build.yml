@@ -24,6 +24,6 @@ jobs:
       - name: Enforce dependency audit
         run: npm audit --omit=dev --audit-level=high
       - name: Security and protected API tests
-        run: node --experimental-default-type=module --test tests/security.test.js
+        run: npm test
       - name: Build
         run: npm run build
