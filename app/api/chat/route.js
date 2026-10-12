@@ -1,6 +1,6 @@
-import { getModel } from "../../../lib/config";
-import { authenticateRequest, canUseModel, requiredPlanForModel } from "../../../lib/security";
-import { consumeRateLimit, getPlan } from "../../../lib/store";
+import { getModel } from "../../../lib/config.js";
+import { authenticateRequest, canUseModel, requiredPlanForModel } from "../../../lib/security.js";
+import { consumeRateLimit, getPlan } from "../../../lib/store.js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
