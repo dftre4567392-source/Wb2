@@ -15,10 +15,19 @@ export async function GET(req) {
   if (!key) return json({ error: "Tribute is not configured." }, 503);
 
   try {
-    const upstream = await fetch("https://tribute.tg/api/v1/products?limit=100", {
-      headers: { "Api-Key": key, Accept: "application/json" },
-      cache: "no-store"
-    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    let upstream;
+    try {
+      upstream = await fetch("https://tribute.tg/api/v1/products?size=100", {
+        headers: { "Api-Key": key, Accept: "application/json" },
+        signal: controller.signal,
+        cache: "no-store"
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+
     const text = await upstream.text();
     let data;
     try { data = JSON.parse(text); } catch { data = null; }
@@ -28,7 +37,16 @@ export async function GET(req) {
       return json({ error: "Не удалось загрузить тарифы Tribute.", providerStatus: upstream.status }, upstream.status >= 500 ? 502 : upstream.status);
     }
 
-    const list = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : Array.isArray(data?.products) ? data.products : [];
+    const list = Array.isArray(data?.rows)
+      ? data.rows
+      : Array.isArray(data)
+        ? data
+        : Array.isArray(data?.items)
+          ? data.items
+          : Array.isArray(data?.products)
+            ? data.products
+            : [];
+
     const products = list.map(p => ({
       id: p.id,
       type: p.type,
@@ -45,7 +63,8 @@ export async function GET(req) {
 
     return json({ products, meta: data?.meta || null });
   } catch (error) {
-    console.error("Tribute products connection error", error?.message || error);
-    return json({ error: "Не удалось связаться с Tribute." }, 502);
+    const timedOut = error?.name === "AbortError";
+    console.error("Tribute products connection error", timedOut ? "timeout" : error?.message || error);
+    return json({ error: timedOut ? "Tribute отвечает слишком долго." : "Не удалось связаться с Tribute." }, timedOut ? 504 : 502);
   }
 }
