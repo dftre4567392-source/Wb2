@@ -1,5 +1,5 @@
-import { authenticateRequest } from "../../../../lib/security";
-import { getPlan, getRateLimit, storageMode } from "../../../../lib/store";
+import { authenticateRequest } from "../../../../lib/security.js";
+import { getPlan, getRateLimit, storageMode } from "../../../../lib/store.js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
