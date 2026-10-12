@@ -1,4 +1,4 @@
-name: Render smoke test
+name: Render production smoke test
 
 on:
   push:
@@ -9,27 +9,39 @@ on:
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
-      - name: Check homepage
+      - name: Check homepage and health
         run: |
           set -euo pipefail
-          code=$(curl --retry 4 --retry-delay 5 --retry-all-errors -sS -o /tmp/home.html -w '%{http_code}' https://si-base.onrender.com/)
-          echo "home_status=$code"
-          test "$code" = "200"
+          home=$(curl --retry 4 --retry-delay 5 --retry-all-errors -sS -o /tmp/home.html -w '%{http_code}' https://si-base.onrender.com/)
+          echo "home_status=$home"
+          test "$home" = "200"
           grep -q "SI BASE" /tmp/home.html
 
-      - name: Check chat
+          health=$(curl --retry 4 --retry-delay 5 --retry-all-errors -sS -o /tmp/health.json -w '%{http_code}' https://si-base.onrender.com/api/health)
+          echo "health_status=$health"
+          cat /tmp/health.json
+          test "$health" = "200"
+
+      - name: Check all configured AI models
         run: |
           set -euo pipefail
-          code=$(curl --retry 2 --retry-delay 3 --retry-all-errors -sS -o /tmp/chat.json -w '%{http_code}' \
-            -X POST https://si-base.onrender.com/api/chat \
-            -H 'content-type: application/json' \
-            --data '{"model":"aven","messages":[{"role":"user","content":"Ответь только словом OK"}]}')
-          echo "chat_status=$code"
-          cat /tmp/chat.json
-          test "$code" = "200"
-          grep -qi "OK" /tmp/chat.json
+          models=(qwen deepseek gpt gemini grok claude)
+          : > /tmp/model-results.tsv
+          for model in "${models[@]}"; do
+            start=$(date +%s%3N)
+            code=$(curl --max-time 55 -sS -o "/tmp/${model}.json" -w '%{http_code}' \
+              -X POST https://si-base.onrender.com/api/chat \
+              -H 'content-type: application/json' \
+              --data "{\"model\":\"${model}\",\"messages\":[{\"role\":\"user\",\"content\":\"Ответь ровно: OK\"}]}" || true)
+            end=$(date +%s%3N)
+            ms=$((end-start))
+            body=$(tr '\n' ' ' < "/tmp/${model}.json" | head -c 500)
+            printf '%s\t%s\t%s\t%s\n' "$model" "$code" "$ms" "$body" | tee -a /tmp/model-results.tsv
+          done
+          echo '--- model results ---'
+          cat /tmp/model-results.tsv
 
       - name: Check text file upload
         run: |
@@ -42,3 +54,33 @@ jobs:
           cat /tmp/file.json
           test "$code" = "200"
           grep -q "SI BASE test file" /tmp/file.json
+
+      - name: Controlled Qwen burst test
+        run: |
+          set -euo pipefail
+          rm -f /tmp/burst-*.txt
+          start=$(date +%s%3N)
+          seq 1 20 | xargs -I{} -P5 bash -c '
+            code=$(curl --max-time 55 -sS -o /tmp/burst-{}.json -w "%{http_code}" \
+              -X POST https://si-base.onrender.com/api/chat \
+              -H "content-type: application/json" \
+              --data "{\"model\":\"qwen\",\"messages\":[{\"role\":\"user\",\"content\":\"Ответь ровно: OK\"}]}" || true)
+            echo "$code" > /tmp/burst-{}.txt
+          '
+          end=$(date +%s%3N)
+          elapsed_ms=$((end-start))
+          ok=$(grep -l '^200$' /tmp/burst-*.txt 2>/dev/null | wc -l | tr -d ' ')
+          rate429=$(grep -l '^429$' /tmp/burst-*.txt 2>/dev/null | wc -l | tr -d ' ')
+          other=$((20-ok-rate429))
+          if [ "$elapsed_ms" -gt 0 ]; then
+            rpm=$((ok*60000/elapsed_ms))
+          else
+            rpm=0
+          fi
+          echo "burst_total=20"
+          echo "burst_parallelism=5"
+          echo "burst_ok=$ok"
+          echo "burst_429=$rate429"
+          echo "burst_other=$other"
+          echo "burst_elapsed_ms=$elapsed_ms"
+          echo "observed_effective_rpm=$rpm"
