@@ -1,0 +1,110 @@
+name: Build Syntex RC8.1 ISO
+
+on:
+  push:
+    branches: [syntex-iso-build-rc81]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y xorriso rsync curl unzip python3 python3-pytest
+
+      - name: Download Syntex RC8.1 package
+        run: |
+          set -euo pipefail
+          curl -fL --retry 5 --retry-delay 3 \
+            'https://drive.usercontent.google.com/download?id=1K1yXRfVZkh6QRRddWW0Qb6W3IWxZWiqA&export=download&confirm=t' \
+            -o Syntex_0.26.0_Installer_RC8.1.zip
+          echo '34d8dae65819c850a108ec97f6ea912f46ab65d4284eac99b7393e5c3157f507  Syntex_0.26.0_Installer_RC8.1.zip' | sha256sum -c -
+          unzip -q Syntex_0.26.0_Installer_RC8.1.zip -d rc81
+          test -f rc81/Syntex_0.26.0/VERSION
+
+      - name: Run Syntex regression suite
+        working-directory: rc81/Syntex_0.26.0
+        run: |
+          set -euo pipefail
+          python3 -m pytest -q
+          find appliance/scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+          python3 -m compileall -q syntex_* scripts appliance/scripts
+
+      - name: Download pinned Ubuntu Server base
+        run: |
+          set -euo pipefail
+          curl -fL --retry 5 --retry-delay 5 \
+            'https://releases.ubuntu.com/26.04.1/ubuntu-26.04.1-live-server-amd64.iso' \
+            -o ubuntu-26.04.1-live-server-amd64.iso
+          echo 'cc8a95cde20f6ced61a322420de00f10cc3c90ced545daa46cb9c1a117f1d927  ubuntu-26.04.1-live-server-amd64.iso' | sha256sum -c -
+
+      - name: Build final Syntex ISO
+        run: |
+          set -euo pipefail
+          chmod +x rc81/Syntex_0.26.0/appliance/scripts/*.sh
+          rc81/Syntex_0.26.0/appliance/scripts/build_iso.sh \
+            "$GITHUB_WORKSPACE/ubuntu-26.04.1-live-server-amd64.iso" \
+            "$GITHUB_WORKSPACE/Syntex-0.26.0-FINAL.iso"
+          rc81/Syntex_0.26.0/appliance/scripts/validate_iso.sh "$GITHUB_WORKSPACE/Syntex-0.26.0-FINAL.iso"
+          sha256sum Syntex-0.26.0-FINAL.iso | tee Syntex-0.26.0-FINAL.iso.sha256
+          stat -c '%n %s bytes' Syntex-0.26.0-FINAL.iso
+
+      - name: Split ISO for reliable artifact transfer
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          split -b 750M -d -a 2 Syntex-0.26.0-FINAL.iso artifacts/Syntex-0.26.0-FINAL.iso.part-
+          cp Syntex-0.26.0-FINAL.iso.sha256 artifacts/
+          (cd artifacts && sha256sum Syntex-0.26.0-FINAL.iso.part-* > parts.sha256)
+          ls -lh artifacts
+
+      - name: Upload manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntex-final-manifest
+          path: |
+            artifacts/Syntex-0.26.0-FINAL.iso.sha256
+            artifacts/parts.sha256
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload part 00
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntex-final-part-00
+          path: artifacts/Syntex-0.26.0-FINAL.iso.part-00
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload part 01
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntex-final-part-01
+          path: artifacts/Syntex-0.26.0-FINAL.iso.part-01
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload part 02
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntex-final-part-02
+          path: artifacts/Syntex-0.26.0-FINAL.iso.part-02
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload part 03
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntex-final-part-03
+          path: artifacts/Syntex-0.26.0-FINAL.iso.part-03
+          compression-level: 0
+          retention-days: 1
