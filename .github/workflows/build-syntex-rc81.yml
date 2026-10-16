@@ -58,11 +58,11 @@ jobs:
           sha256sum Syntex-0.26.0-FINAL.iso | tee Syntex-0.26.0-FINAL.iso.sha256
           stat -c '%n %s bytes' Syntex-0.26.0-FINAL.iso
 
-      - name: Split ISO for reliable artifact transfer
+      - name: Split ISO for transfer
         run: |
           set -euo pipefail
           mkdir -p artifacts
-          split -b 750M -d -a 2 Syntex-0.26.0-FINAL.iso artifacts/Syntex-0.26.0-FINAL.iso.part-
+          split -b 450M -d -a 2 Syntex-0.26.0-FINAL.iso artifacts/Syntex-0.26.0-FINAL.iso.part-
           cp Syntex-0.26.0-FINAL.iso.sha256 artifacts/
           (cd artifacts && sha256sum Syntex-0.26.0-FINAL.iso.part-* > parts.sha256)
           ls -lh artifacts
@@ -106,5 +106,29 @@ jobs:
         with:
           name: syntex-final-part-03
           path: artifacts/Syntex-0.26.0-FINAL.iso.part-03
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload part 04
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntex-final-part-04
+          path: artifacts/Syntex-0.26.0-FINAL.iso.part-04
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload part 05
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntex-final-part-05
+          path: artifacts/Syntex-0.26.0-FINAL.iso.part-05
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload part 06
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntex-final-part-06
+          path: artifacts/Syntex-0.26.0-FINAL.iso.part-06
           compression-level: 0
           retention-days: 1
