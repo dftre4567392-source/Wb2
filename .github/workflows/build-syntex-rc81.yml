@@ -1,4 +1,4 @@
-name: Build Syntex RC8.2 ISO
+name: Build Syntex RC8.3 ISO
 
 on:
   push:
@@ -53,16 +53,19 @@ jobs:
           chmod +x rc81/Syntex_0.26.0/appliance/scripts/*.sh
           rc81/Syntex_0.26.0/appliance/scripts/build_iso.sh \
             "$GITHUB_WORKSPACE/ubuntu-26.04.1-live-server-amd64.iso" \
-            "$GITHUB_WORKSPACE/Syntex-0.26.0-RC8.2.iso"
+            "$GITHUB_WORKSPACE/Syntex-0.26.0-RC8.3.iso"
 
       - name: Repair install-media checksum manifest
         run: |
           set -euo pipefail
           mkdir -p "$GITHUB_WORKSPACE/iso-check"
-          sudo mount -o loop,ro "$GITHUB_WORKSPACE/Syntex-0.26.0-RC8.2.iso" "$GITHUB_WORKSPACE/iso-check"
+          sudo mount -o loop,ro "$GITHUB_WORKSPACE/Syntex-0.26.0-RC8.3.iso" "$GITHUB_WORKSPACE/iso-check"
           (
             cd "$GITHUB_WORKSPACE/iso-check"
-            find . -type f ! -path './md5sum.txt' -print0 \
+            find . -type f \
+              ! -path './md5sum.txt' \
+              ! -path './boot.catalog' \
+              -print0 \
               | LC_ALL=C sort -z \
               | xargs -0 md5sum
           ) > "$GITHUB_WORKSPACE/md5sum.txt"
@@ -70,41 +73,41 @@ jobs:
           rm -rf "$GITHUB_WORKSPACE/iso-check"
 
           xorriso \
-            -indev "$GITHUB_WORKSPACE/Syntex-0.26.0-RC8.2.iso" \
-            -outdev "$GITHUB_WORKSPACE/Syntex-0.26.0-RC8.2.fixed.iso" \
+            -indev "$GITHUB_WORKSPACE/Syntex-0.26.0-RC8.3.iso" \
+            -outdev "$GITHUB_WORKSPACE/Syntex-0.26.0-RC8.3.fixed.iso" \
             -map "$GITHUB_WORKSPACE/md5sum.txt" /md5sum.txt \
             -boot_image any replay
 
-          mv "$GITHUB_WORKSPACE/Syntex-0.26.0-RC8.2.fixed.iso" "$GITHUB_WORKSPACE/Syntex-0.26.0-RC8.2.iso"
+          mv "$GITHUB_WORKSPACE/Syntex-0.26.0-RC8.3.fixed.iso" "$GITHUB_WORKSPACE/Syntex-0.26.0-RC8.3.iso"
 
       - name: Verify Syntex structure and every media checksum
         run: |
           set -euo pipefail
-          rc81/Syntex_0.26.0/appliance/scripts/validate_iso.sh "$GITHUB_WORKSPACE/Syntex-0.26.0-RC8.2.iso"
+          rc81/Syntex_0.26.0/appliance/scripts/validate_iso.sh "$GITHUB_WORKSPACE/Syntex-0.26.0-RC8.3.iso"
 
           mkdir -p "$GITHUB_WORKSPACE/iso-verify"
-          sudo mount -o loop,ro "$GITHUB_WORKSPACE/Syntex-0.26.0-RC8.2.iso" "$GITHUB_WORKSPACE/iso-verify"
+          sudo mount -o loop,ro "$GITHUB_WORKSPACE/Syntex-0.26.0-RC8.3.iso" "$GITHUB_WORKSPACE/iso-verify"
           (
             cd "$GITHUB_WORKSPACE/iso-verify"
             md5sum -c md5sum.txt
           )
           sudo umount "$GITHUB_WORKSPACE/iso-verify"
 
-          sha256sum Syntex-0.26.0-RC8.2.iso | tee Syntex-0.26.0-RC8.2.iso.sha256
-          stat -c '%n %s bytes' Syntex-0.26.0-RC8.2.iso
+          sha256sum Syntex-0.26.0-RC8.3.iso | tee Syntex-0.26.0-RC8.3.iso.sha256
+          stat -c '%n %s bytes' Syntex-0.26.0-RC8.3.iso
 
       - name: Upload corrected Rufus ISO
         uses: actions/upload-artifact@v4
         with:
-          name: SYNTEX-RC8.2-RUFUS-ISO-CHECKSUM-FIXED
-          path: Syntex-0.26.0-RC8.2.iso
+          name: SYNTEX-RC8.3-RUFUS-ISO-CHECKSUM-FIXED
+          path: Syntex-0.26.0-RC8.3.iso
           compression-level: 0
           retention-days: 7
 
       - name: Upload corrected ISO checksum
         uses: actions/upload-artifact@v4
         with:
-          name: SYNTEX-RC8.2-SHA256
-          path: Syntex-0.26.0-RC8.2.iso.sha256
+          name: SYNTEX-RC8.3-SHA256
+          path: Syntex-0.26.0-RC8.3.iso.sha256
           compression-level: 0
           retention-days: 7
